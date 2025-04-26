@@ -1,21 +1,39 @@
+networks:
+  samnet:
+    driver: bridge
+
 services:
-  sam-server:
-    image: ghcr.io/sam-research/sam-instant-messenger:main
-    container_name: sam_server
-    command: ["-i", "0.0.0.0"]
-    environment:
-      - RUST_LOG=info
-    ports:
-      - 8080:8080
-  database:
-    image: postgres:latest
+  sam_db:
+    container_name: sam_db
+    image: postgres
     restart: always
-    container_name: database_container
-    depends_on:
-      - sam-server
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: sam_db
     volumes:
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./initdb:/docker-entrypoint-initdb.d
+    networks:
+      - samnet
+  gateway:
+    image: nginx:latest
+    depends_on:
+      - sam_db
+      - sam_server
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    ports:
+      - "8080:80"
+    networks:
+      - samnet
+      - default
+  sam_server:
+    image: ghcr.io/sam-research/sam-instant-messenger:main
+    depends_on:
+      - sam_db
+    container_name: sam_server
+    command: ["-c", "config.json"]
+    volumes:
+      - ./sam.json:/config.json
+    networks:
+      - samnet
