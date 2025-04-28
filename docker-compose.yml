@@ -15,18 +15,6 @@ services:
       - ./initdb:/docker-entrypoint-initdb.d
     networks:
       - samnet
-  gateway:
-    image: nginx:latest
-    depends_on:
-      - sam_db
-      - sam_server
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-    ports:
-      - "8080:80"
-    networks:
-      - samnet
-      - default
   sam_server:
     image: ghcr.io/sam-research/sam-instant-messenger:main
     depends_on:
@@ -34,6 +22,34 @@ services:
     container_name: sam_server
     command: ["-c", "config.json"]
     volumes:
-      - ./sam.json:/config.json
+      - ./config/sam.json:/config.json
     networks:
       - samnet
+  denim_proxy:
+    image: ghcr.io/sam-research/denim-on-sam:main
+    depends_on:
+      - sam_db
+    command: ["-c", "config.json"]
+    volumes:
+      - ./config/denim.json:/config.json
+    networks:
+      - samnet
+
+  gateway:
+      image: nginx:latest
+      depends_on:
+        - sam_db
+        - sam_server
+      volumes:
+        - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      ports:
+        - "8080:80"
+      networks:
+        - samnet
+        - default
+  tcpdump:
+    image: kaazing/tcpdump
+    network_mode: "host"
+    volumes:
+      - ./tcpdump:/tcpdump
+
