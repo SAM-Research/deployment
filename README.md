@@ -54,7 +54,7 @@ IP.1 = 127.0.0.1
 ```jsonc
 {
   "linkSecret": "linktest", // Secret to use when provsioning devices
-  "logging": "info", // Logging level
+  "logging": "info", // Logging level (optional)
   "provisionTimeout": 600, // Time in seconds before a device link token becomes invalid
   "deniableRatio": 1.0, // Deniable ratio (q)
   "bufferSize": 10, // Size of buffers used internally by both the SAM Server and the DenIM-SAM-Proxy

@@ -308,7 +308,7 @@ if __name__ == "__main__":
         "databaseUrl": db_url,
         "address": f"0.0.0.0:{port}",
         "messageBufferSize": config["bufferSize"],
-        "logging": config["logging"],
+        "logging": config.get("logging", ""),
     }
     proxy_config = {
         "databaseUrl": db_url,
@@ -316,7 +316,7 @@ if __name__ == "__main__":
         "denimProxyAddress": f"0.0.0.0:{port}",
         "deniableRatio": config["deniableRatio"],
         "channelBufferSize": config["bufferSize"],
-        "logging": config["logging"],
+        "logging": config.get("logging", ""),
     }
     if server_tls is not None:
         server_config["tls"] = server_tls
