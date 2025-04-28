@@ -29,6 +29,7 @@ services:
     image: ghcr.io/sam-research/denim-on-sam:main
     depends_on:
       - sam_db
+    container_name: denim_proxy
     command: ["-c", "config.json"]
     volumes:
       - ./config/denim.json:/config.json
@@ -42,8 +43,6 @@ services:
         - sam_server
       volumes:
         - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-      ports:
-        - "8080:80"
       networks:
         - samnet
         - default

@@ -1,8 +1,0 @@
-{
-  "databaseUrl": "postgres://admin:admin@sam_db:5432/sam_db",
-  "samAddress": "sam_server:80",
-  "denimProxyAddress": "0.0.0.0:80",
-  "deniableRatio": 1.0,
-  "channelBufferSize": 10,
-  "logging": "info"
-}

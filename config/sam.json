@@ -1,6 +1,0 @@
-{
-  "databaseUrl": "postgres://admin:admin@sam_db:5432/sam_db",
-  "address": "0.0.0.0:80",
-  "messageBufferSize": 10,
-  "logging": "info"
-}
