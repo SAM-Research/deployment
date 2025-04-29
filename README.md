@@ -16,7 +16,7 @@ The internal services can also be setup to use mTLS.
 
 ## Usage
 
-1. Create a `cert.cnf` for the tls configuration (optional)
+1. Create a `.cnf` file for the tls configuration (optional)
 
 ```conf
 [ req ]
