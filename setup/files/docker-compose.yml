@@ -51,4 +51,12 @@ services:
     network_mode: "host"
     volumes:
       - ./tcpdump:/tcpdump
+  sam_dispatch:
+    image: ghcr.io/sam-research/sam-dispatch:main
+    container_name: sam_dispatch
+    command: ["config.json"]
+    volumes:
+      - ./config/dispatch.json:/config.json
+    networks:
+      - default
 
