@@ -233,6 +233,7 @@ def create_docker_compose(
     gateway_volumes: list = config["services"]["gateway"]["volumes"]
     denim_volumes: list = config["services"]["denim_proxy"]["volumes"]
     sam_volumes: list = config["services"]["sam_server"]["volumes"]
+    dispatch_volumes: list = config["services"]["sam_dispatch"]["volumes"]
     if tls:
         gateway_volumes.extend(gateway_tls)
         denim_volumes.extend(denim_tls)
@@ -243,6 +244,11 @@ def create_docker_compose(
         sam_volumes.extend(sam_mtls)
     if expose is not None:
         config["services"]["gateway"]["ports"] = [f"{expose}:{port}"]
+
+    report_dir = root_outdir / "reports"
+    report_dir.mkdir(exist_ok=True)
+    dispatch_volumes.append("./reports:/reports")
+
     conn = extract_connection_url(config)
     out_compose = root_outdir / "docker-compose.yml"
     with open(out_compose, "w") as f:
@@ -280,7 +286,11 @@ if __name__ == "__main__":
         sys.exit(1)
 
     with open(config, "r") as f:
-        config: dict = json.load(f)
+        master_config: dict = json.load(f)
+        config = master_config["samnet"]
+        # modify dispatcher config
+        dispatch_config = master_config["samDispatch"]
+        dispatch_config["address"] = "0.0.0.0:80"
 
     config_dir = root_outdir / "config"
     initdb_dir = root_outdir / "initdb"
@@ -327,6 +337,8 @@ if __name__ == "__main__":
         json.dump(proxy_config, f, indent=2)
     with open(config_dir / "sam.json", "w") as f:
         json.dump(server_config, f, indent=2)
+    with open(config_dir / "dispatch.json", "w") as f:
+        json.dump(dispatch_config, f, indent=2)
 
     with open(initdb_dir / "setup.sql", "w") as f:
         f.write(create_setupsql(config["linkSecret"], config["provisionTimeout"]))

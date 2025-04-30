@@ -10,6 +10,7 @@ The generated project contains:
    3. Database
    4. Reverse Proxy Gateway exposed to default or host
 2. tcpdump on the traffic to and from the gateway
+3. SAM Dispatcher for automated test clients
 
 The project can be setup so client and gateway communicates with TLS as well as the internal services.
 The internal services can also be setup to use mTLS.
@@ -53,16 +54,32 @@ IP.1 = 127.0.0.1
 
 ```jsonc
 {
-  "linkSecret": "linktest", // Secret to use when provsioning devices
-  "logging": "info", // Logging level (optional)
-  "provisionTimeout": 600, // Time in seconds before a device link token becomes invalid
-  "deniableRatio": 1.0, // Deniable ratio (q)
-  "bufferSize": 10, // Size of buffers used internally by both the SAM Server and the DenIM-SAM-Proxy
-  "expose": 4443, // Port used on your host machine (optional, only if you want to access the server from outside the docker network)
-  "tls": {
-    // TLS configuration (optional)
-    "mtls": true, // Internal communication on the network happens over mtls
-    "config": "cert.cnf" // Previously created conf file
+  "samnet": {
+    "linkSecret": "linktest", // Secret to use when provsioning devices
+    "logging": "info", // Logging level (optional)
+    "provisionTimeout": 600, // Time in seconds before a device link token becomes invalid
+    "deniableRatio": 1.0, // Deniable ratio (q)
+    "bufferSize": 10, // Size of buffers used internally by both the SAM Server and the DenIM-SAM-Proxy
+    "expose": 4443, // Port used on your host machine (optional, only if you want to access the server from outside the docker network)
+    "tls": {
+      // TLS configuration (optional)
+      "mtls": true, // Internal communication on the network happens over mtls
+      "config": "cert.cnf" // Previously created conf file
+    }
+  },
+  // https://github.com/SAM-Research/sam-dispatch/blob/main/README.md
+  "samDispatch": {
+    "name": "Example Scenario",
+    // address is set automaticly
+    "clients": 1,
+    "groups": [1],
+    "tickMillis": 1000,
+    "durationTicks": 500,
+    "messageSizeRange": [200, 500],
+    "denimProbability": 1,
+    "sendRateRange": [1, 5],
+    "startEpoch": 10,
+    "report": "report.json"
   }
 }
 ```
