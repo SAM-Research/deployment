@@ -169,7 +169,7 @@ VALUES
     (1, '{link_secret}', {provision_timeout});"""
 
 
-def create_nginx(port: str, is_mtls: bool):
+def create_nginx(port: str, is_mtls: bool, path: Path):
     is_tls = port == "443"
 
     listen = f"{port} ssl" if is_tls else port
@@ -188,7 +188,7 @@ def create_nginx(port: str, is_mtls: bool):
             proxy_ssl_name localhost;
             proxy_ssl_server_name on;"""
 
-    with open(Path(__file__).parent / "files/nginx.conf", "r") as f:
+    with open(path, "r") as f:
         temp = f.read()
         return (
             temp.replace("<PROTOCOL>", protocol)
@@ -211,7 +211,15 @@ def extract_connection_url(compose: dict[str, str]):
 
 
 def create_docker_compose(
-    tls: bool, mtls: bool, expose: int | None, port: int, root_outdir: Path
+    tls: bool,
+    mtls: bool,
+    expose_sam: int | None,
+    expose_dispatch: int | None,
+    port: int,
+    root_outdir: Path,
+    is_denim: bool,
+    compose_path: Path,
+    out_path: Path,
 ):
     gateway_tls = ["./certs/nginx:/etc/nginx/certs/nginx"]
     gateway_mtls = [
@@ -226,32 +234,36 @@ def create_docker_compose(
     sam_tls = ["./certs/sam:/certs/sam"]
     sam_mtls = ["./certs/root/root.crt:/certs/root/root.crt"]
 
-    compose = Path(__file__).parent / "files/docker-compose.yml"
-    with open(compose, "r") as f:
+    with open(compose_path, "r") as f:
         config: dict = yaml.safe_load(f)
 
     gateway_volumes: list = config["services"]["gateway"]["volumes"]
-    denim_volumes: list = config["services"]["denim_proxy"]["volumes"]
+    if is_denim:
+        denim_volumes: list = config["services"]["denim_proxy"]["volumes"]
     sam_volumes: list = config["services"]["sam_server"]["volumes"]
     dispatch_volumes: list = config["services"]["sam_dispatch"]["volumes"]
     if tls:
         gateway_volumes.extend(gateway_tls)
-        denim_volumes.extend(denim_tls)
+        if is_denim:
+            denim_volumes.extend(denim_tls)
         sam_volumes.extend(sam_tls)
     if mtls:
         gateway_volumes.extend(gateway_mtls)
-        denim_volumes.extend(denim_mtls)
+        if is_denim:
+            denim_volumes.extend(denim_mtls)
         sam_volumes.extend(sam_mtls)
-    if expose is not None:
-        config["services"]["gateway"]["ports"] = [f"{expose}:{port}"]
+    if expose_sam is not None:
+        config["services"]["gateway"]["ports"] = [f"{expose_sam}:{port}"]
+    if expose_dispatch is not None:
+        config["services"]["sam_dispatch"]["ports"] = [f"{expose_dispatch}:80"]
 
     report_dir = root_outdir / "reports"
     report_dir.mkdir(exist_ok=True)
     dispatch_volumes.append("./reports:/reports")
 
     conn = extract_connection_url(config)
-    out_compose = root_outdir / "docker-compose.yml"
-    with open(out_compose, "w") as f:
+
+    with open(out_path, "w") as f:
         yaml.safe_dump(config, f, indent=2)
     return conn
 
@@ -262,6 +274,32 @@ def download_initsql(outdir: Path):
     return os.system(
         f"curl -o {outpath} https://raw.githubusercontent.com/SAM-Research/sam-instant-messenger/refs/heads/main/server/database/init.sql"
     )
+
+
+def create_cert_cnf(
+    outdir: Path,
+    country: str,
+    state: str,
+    locality: str,
+    organization: str,
+    unit: str,
+    common_name: str,
+):
+    with open(Path(__file__).parent / "files/cert.cnf", "r") as f:
+        temp = (
+            f.read()
+            .replace("<C>", country)
+            .replace("<ST>", state)
+            .replace("<L>", locality)
+            .replace("<O>", organization)
+            .replace("<OU>", unit)
+            .replace("<CN>", common_name)
+        )
+    outfile = outdir / "certs" / "cert.cnf"
+    outfile.parent.mkdir(exist_ok=True)
+    with open(outfile, "w") as f:
+        f.write(temp)
+    return outfile
 
 
 if __name__ == "__main__":
@@ -285,12 +323,16 @@ if __name__ == "__main__":
         print("Config does not exist!")
         sys.exit(1)
 
+    expose_dispatch: str | None = None
     with open(config, "r") as f:
         master_config: dict = json.load(f)
         config = master_config["samnet"]
         # modify dispatcher config
         dispatch_config = master_config["samDispatch"]
         dispatch_config["address"] = "0.0.0.0:80"
+        if "expose" in dispatch_config:
+            expose_dispatch = dispatch_config["expose"]
+            del dispatch_config["expose"]
 
     config_dir = root_outdir / "config"
     initdb_dir = root_outdir / "initdb"
@@ -306,14 +348,48 @@ if __name__ == "__main__":
     tls = False
     if "tls" in config:
         tls = True
-        cert_cnf = Path(config["tls"]["config"])
         mtls = config["tls"]["mtls"]
+        cert_config = config["tls"]["config"]
+        cert_cnf = create_cert_cnf(
+            root_outdir,
+            cert_config["C"],
+            cert_config["ST"],
+            cert_config["L"],
+            cert_config["O"],
+            cert_config["OU"],
+            cert_config["CN"],
+        )
         server_tls, proxy_tls = generate_tls(root_outdir, cert_cnf, days, mtls)
     port = "80" if server_tls is None else "443"
 
+    in_compose = Path(__file__).parent / "files/docker-compose.yml"
+    denim_compose = root_outdir / "docker-compose.yml"
     db_url = create_docker_compose(
-        tls, mtls, config.get("expose", None), port, root_outdir
+        tls,
+        mtls,
+        config.get("expose", None),
+        expose_dispatch,
+        port,
+        root_outdir,
+        True,
+        in_compose,
+        denim_compose,
     )
+
+    in_sam_compose = Path(__file__).parent / "files/sam-docker-compose.yml"
+    sam_compose = root_outdir / "sam-docker-compose.yml"
+    db_url = create_docker_compose(
+        tls,
+        mtls,
+        config.get("expose", None),
+        expose_dispatch,
+        port,
+        root_outdir,
+        False,
+        in_sam_compose,
+        sam_compose,
+    )
+
     server_config = {
         "databaseUrl": db_url,
         "address": f"0.0.0.0:{port}",
@@ -348,6 +424,10 @@ if __name__ == "__main__":
         sys.exit(1)
 
     with open(ngnix_dir / "nginx.conf", "w") as f:
-        f.write(create_nginx(port, mtls))
+        temp = Path(__file__).parent / "files/nginx.conf"
+        f.write(create_nginx(port, mtls, temp))
+    with open(ngnix_dir / "sam-nginx.conf", "w") as f:
+        temp = Path(__file__).parent / "files/sam-nginx.conf"
+        f.write(create_nginx(port, mtls, temp))
 
     print("Done!")

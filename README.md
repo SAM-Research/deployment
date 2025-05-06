@@ -71,6 +71,7 @@ IP.1 = 127.0.0.1
   // https://github.com/SAM-Research/sam-dispatch/blob/main/README.md
   "samDispatch": {
     "name": "Example Scenario",
+    "type": "denim",
     // address is set automaticly
     "clients": 1,
     "groups": [1],
@@ -80,7 +81,9 @@ IP.1 = 127.0.0.1
     "denimProbability": 1,
     "sendRateRange": [1, 5],
     "startEpoch": 10,
-    "report": "report.json"
+    "report": "report.json",
+    // additional field to expose dispatch to host
+    "expose": 8080
   }
 }
 ```

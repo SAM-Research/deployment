@@ -1,0 +1,51 @@
+networks:
+  samnet:
+    driver: bridge
+
+services:
+  sam_db:
+    container_name: sam_db
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: sam_db
+    volumes:
+      - ./initdb:/docker-entrypoint-initdb.d
+    networks:
+      - samnet
+  sam_server:
+    image: ghcr.io/sam-research/sam-instant-messenger:main
+    depends_on:
+      - sam_db
+    container_name: sam_server
+    command: ["-c", "config.json"]
+    volumes:
+      - ./config/sam.json:/config.json
+    networks:
+      - samnet
+
+  gateway:
+      image: nginx:latest
+      depends_on:
+        - sam_db
+        - sam_server
+      volumes:
+        - ./nginx/sam-nginx.conf:/etc/nginx/nginx.conf
+      networks:
+        - samnet
+        - default
+  tcpdump:
+    image: kaazing/tcpdump
+    network_mode: "host"
+    volumes:
+      - ./tcpdump:/tcpdump
+  sam_dispatch:
+    image: ghcr.io/sam-research/sam-dispatch:main
+    container_name: sam_dispatch
+    command: ["config.json"]
+    volumes:
+      - ./config/dispatch.json:/config.json
+    networks:
+      - default
