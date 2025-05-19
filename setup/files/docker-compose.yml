@@ -46,11 +46,7 @@ services:
       networks:
         - samnet
         - default
-  tcpdump:
-    image: kaazing/tcpdump
-    network_mode: "host"
-    volumes:
-      - ./tcpdump:/tcpdump
+
   sam_dispatch:
     image: ghcr.io/sam-research/sam-dispatch:main
     container_name: sam_dispatch
@@ -59,4 +55,19 @@ services:
       - ./config/dispatch.json:/config.json
     networks:
       - default
+  health_service:
+    image: ghcr.io/sam-research/health-service:main
+    container_name: health_service
+    command: ["config.json"]
+    networks:
+      - samnet
+    volumes:
+      - ./config/health.json:/config.json
+  client:
+    image: ghcr.io/sam-research/test-client:main
+    command: ["config.json"]
+    networks:
+      - default
+    volumes:
+      - ./config/client.json:/config.json
 
