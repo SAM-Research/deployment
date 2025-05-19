@@ -204,7 +204,7 @@ def save_docker_log(client: docker.DockerClient, name: str, out: Path):
     conns = containers(client, name)
     with open(out, "w") as f:
         for container in conns:
-            f.write(f"\n=== Logs for {container.name} ===\n".encode())
+            f.write(f"\n=== Logs for {container.name} ===\n")
             logs = container.logs().decode("utf-8", errors="replace")
             f.write(logs)
 
