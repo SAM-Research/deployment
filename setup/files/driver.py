@@ -200,6 +200,15 @@ def create_analysis_config(
     return None
 
 
+def save_docker_log(client: docker.DockerClient, name: str, out: Path):
+    conns = containers(client, name)
+    with open(out, "w") as f:
+        for container in conns:
+            f.write(f"\n=== Logs for {container.name} ===\n".encode())
+            logs = container.logs().decode("utf-8", errors="replace")
+            f.write(logs)
+
+
 if __name__ == "__main__":
     project_name = Path(__file__).parent.name
     client = docker.from_env()
@@ -259,6 +268,10 @@ if __name__ == "__main__":
             tshark.terminate()
 
             break
+    print("Saving docker logs...")
+    log_out = Path("./reports/dockerlog.log")
+    save_docker_log(client, project_name, log_out)
+
     print("Closing docker compose...")
     close_docker_compose(client, project_name)
 
