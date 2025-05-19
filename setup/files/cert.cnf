@@ -26,4 +26,6 @@ subjectAltName = @alt_names
 [ alt_names ]
 DNS.1 = localhost
 DNS.2 = sam_server
+DNS.3 = denim_proxy
+DNS.4 = gateway
 IP.1 = 127.0.0.1

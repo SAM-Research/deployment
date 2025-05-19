@@ -17,41 +17,7 @@ The internal services can also be setup to use mTLS.
 
 ## Usage
 
-1. Create a `.cnf` file for the tls configuration (optional)
-
-```conf
-[ req ]
-default_bits       = 2048
-default_md         = sha256
-prompt             = no
-distinguished_name = req_distinguished_name
-x509_extensions    = v3_req
-
-[ req_distinguished_name ]
-C = DK
-ST = Nordjylland
-L = Aalborg
-O = SAM
-OU = IT
-CN = localhost
-
-[ v3_ca ]
-basicConstraints = critical, CA:TRUE
-keyUsage = critical, digitalSignature, keyCertSign, cRLSign
-subjectAltName = @alt_names
-
-[ v3_req ]
-keyUsage = critical, digitalSignature, keyEncipherment
-extendedKeyUsage = serverAuth, clientAuth
-subjectAltName = @alt_names
-
-[ alt_names ]
-DNS.1 = localhost
-DNS.2 = sam_server
-IP.1 = 127.0.0.1
-```
-
-2. Create a JSON config file, in the format below:
+1. Create a JSON config file, in the format below:
 
 ```jsonc
 {
@@ -65,7 +31,15 @@ IP.1 = 127.0.0.1
     "tls": {
       // TLS configuration (optional)
       "mtls": true, // Internal communication on the network happens over mtls
-      "config": "cert.cnf" // Previously created conf file
+      "config": {
+        // fields for openssl
+        "C": "DK",
+        "ST": "Nordjylland",
+        "L": "Aalborg",
+        "O": "SAM-Research",
+        "OU": "IT",
+        "CN": "localhost"
+      }
     }
   },
   // https://github.com/SAM-Research/sam-dispatch/blob/main/README.md
@@ -88,5 +62,8 @@ IP.1 = 127.0.0.1
 }
 ```
 
-3. run `python ./setup/setup.py <PROJECT_NAME> <PATH_TO_JSON_CONFIG>`
-4. run `docker compose up`
+2. install docker and docker compose https://www.docker.com/
+3. install tshark https://www.wireshark.org/docs/man-pages/tshark.html
+4. install dependencies `pip install -r requirements.txt`
+5. run `python ./setup/setup.py <PROJECT_NAME> <PATH_TO_JSON_CONFIG>`
+6. run `docker compose up`

@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 import sys
 import json
 import yaml
+import shutil
 
 
 def generate_private_key(out_path: Path):
@@ -112,6 +113,27 @@ def create_server_tls(
     return server_tls
 
 
+def create_health_server_tls(
+    root_outdir: Path,
+    cert: Path | None,
+    key_path: Path | None,
+    ca_cert: Path,
+    mtls: bool,
+):
+    server_config = {
+        "certificate": "/" + ca_cert.relative_to(root_outdir).as_posix(),
+    }
+    if mtls and cert is None and key_path is None:
+        print("Health service client certs was None")
+        sys.exit(1)
+    if mtls:
+        server_config["clientCertificate"] = (
+            "/" + cert.relative_to(root_outdir).as_posix()
+        )
+        server_config["clientKey"] = "/" + key_path.relative_to(root_outdir).as_posix()
+    return server_config
+
+
 def generate_tls(root_outdir: Path, cert_cnf: Path, days: int, mtls: bool):
     outdir = root_outdir / "certs"
     outdir.mkdir(exist_ok=True)
@@ -133,14 +155,13 @@ def generate_tls(root_outdir: Path, cert_cnf: Path, days: int, mtls: bool):
         print("Failed to generate proxy certificates!")
         sys.exit(1)
 
-    nginx_cert, _ = generate_certifacte(
-        "nginx", outdir, ca_key, ca_cert, cert_cnf, days
-    )
-    if nginx_cert is None:
+    nginx_key, _ = generate_certifacte("nginx", outdir, ca_key, ca_cert, cert_cnf, days)
+    if nginx_key is None:
         print("Failed to generate nginx certificates!")
         sys.exit(1)
 
     client_key, client_cert = (None, None)
+    health_key, health_cert = (None, None)
     if mtls:
         client_key, client_cert = generate_certifacte(
             "proxy_client", outdir, ca_key, ca_cert, cert_cnf, days
@@ -148,18 +169,30 @@ def generate_tls(root_outdir: Path, cert_cnf: Path, days: int, mtls: bool):
         if client_key is None:
             print("Failed to generate proxy client certificates!")
             sys.exit(1)
-        ngnix_cert, _ = generate_certifacte(
+        nginx_key, _ = generate_certifacte(
             "nginx_client", outdir, ca_key, ca_cert, cert_cnf, days
         )
-        if ngnix_cert is None:
+        if nginx_key is None:
             print("Failed to generate ngnix client certificates!")
+            sys.exit(1)
+
+        health_key, health_cert = generate_certifacte(
+            "health_client", outdir, ca_key, ca_cert, cert_cnf, days
+        )
+
+        if health_key is None:
+            print("Failed to generate health client certificates!")
             sys.exit(1)
 
     proxy_tls = create_proxy_tls(
         root_outdir, ca_cert, proxy_cert, proxy_key, client_cert, client_key, mtls
     )
     server_tls = create_server_tls(root_outdir, server_cert, server_key, ca_cert, mtls)
-    return server_tls, proxy_tls
+
+    health_tls = create_health_server_tls(
+        root_outdir, health_cert, health_key, ca_cert, mtls
+    )
+    return server_tls, proxy_tls, health_tls
 
 
 def create_setupsql(link_secret: str, provision_timeout: int):
@@ -169,7 +202,7 @@ VALUES
     (1, '{link_secret}', {provision_timeout});"""
 
 
-def create_nginx(port: str, is_mtls: bool, path: Path):
+def create_nginx(port: str, is_mtls: bool, path: Path, root_outdir: Path):
     is_tls = port == "443"
 
     listen = f"{port} ssl" if is_tls else port
@@ -190,13 +223,17 @@ def create_nginx(port: str, is_mtls: bool, path: Path):
 
     with open(path, "r") as f:
         temp = f.read()
-        return (
+        temp = (
             temp.replace("<PROTOCOL>", protocol)
             .replace("<PORT>", port)
             .replace("<TLS>", tls_cfg)
             .replace("<MTLS>", mtls_cfg)
             .replace("<LISTEN>", listen)
         )
+    with open(root_outdir / "nginx/nginx.conf", "w") as f:
+        f.write(temp)
+    with open(root_outdir / "nginx/sam-nginx.conf", "w") as f:
+        f.write(temp.replace("denim_proxy", "sam_server"))
 
 
 def extract_connection_url(compose: dict[str, str]):
@@ -207,7 +244,7 @@ def extract_connection_url(compose: dict[str, str]):
     pwd = env["POSTGRES_PASSWORD"]
     db = env["POSTGRES_DB"]
 
-    return f"postgres://{user}:{pwd}@{url}:5432/{db}"
+    return {"db": db, "host": url, "user": user, "pass": pwd, "port": "5432"}
 
 
 def create_docker_compose(
@@ -219,7 +256,6 @@ def create_docker_compose(
     root_outdir: Path,
     is_denim: bool,
     compose_path: Path,
-    out_path: Path,
 ):
     gateway_tls = ["./certs/nginx:/etc/nginx/certs/nginx"]
     gateway_mtls = [
@@ -234,24 +270,35 @@ def create_docker_compose(
     sam_tls = ["./certs/sam:/certs/sam"]
     sam_mtls = ["./certs/root/root.crt:/certs/root/root.crt"]
 
+    health_tls = ["./certs/root/root.crt:/certs/root/root.crt"]
+    health_mtls = [
+        "./certs/health_client/:/certs/health_client",
+    ]
+    client_tls = health_tls
+
     with open(compose_path, "r") as f:
         config: dict = yaml.safe_load(f)
 
-    gateway_volumes: list = config["services"]["gateway"]["volumes"]
+    gateway_volumes: list[str] = config["services"]["gateway"]["volumes"]
     if is_denim:
-        denim_volumes: list = config["services"]["denim_proxy"]["volumes"]
-    sam_volumes: list = config["services"]["sam_server"]["volumes"]
-    dispatch_volumes: list = config["services"]["sam_dispatch"]["volumes"]
+        denim_volumes: list[str] = config["services"]["denim_proxy"]["volumes"]
+    sam_volumes: list[str] = config["services"]["sam_server"]["volumes"]
+    dispatch_volumes: list[str] = config["services"]["sam_dispatch"]["volumes"]
+    health_volumes: list[str] = config["services"]["health_service"]["volumes"]
+    client_volumes: list[str] = config["services"]["client"]["volumes"]
     if tls:
         gateway_volumes.extend(gateway_tls)
         if is_denim:
             denim_volumes.extend(denim_tls)
         sam_volumes.extend(sam_tls)
+        health_volumes.extend(health_tls)
+        client_volumes.extend(client_tls)
     if mtls:
         gateway_volumes.extend(gateway_mtls)
         if is_denim:
             denim_volumes.extend(denim_mtls)
         sam_volumes.extend(sam_mtls)
+        health_volumes.extend(health_mtls)
     if expose_sam is not None:
         config["services"]["gateway"]["ports"] = [f"{expose_sam}:{port}"]
     if expose_dispatch is not None:
@@ -263,7 +310,19 @@ def create_docker_compose(
 
     conn = extract_connection_url(config)
 
-    with open(out_path, "w") as f:
+    with open(root_outdir / "denim.yml", "w") as f:
+        yaml.safe_dump(config, f, indent=2)
+
+    del config["services"]["denim_proxy"]
+    nginx_conf = next(
+        (x for x in gateway_volumes if x.startswith("./nginx/nginx.conf")), None
+    )
+    if nginx_conf is None:
+        print("Could not find nginx configuration for gateway")
+        sys.exit(1)
+    gateway_volumes.remove(nginx_conf)
+    gateway_volumes.append("./nginx/sam-nginx.conf:/etc/nginx/nginx.conf")
+    with open(root_outdir / "sam.yml", "w") as f:
         yaml.safe_dump(config, f, indent=2)
     return conn
 
@@ -302,18 +361,30 @@ def create_cert_cnf(
     return outfile
 
 
+def create_db_url(db_config: dict):
+    user = db_config["user"]
+    db = db_config["db"]
+    pwd = db_config["pass"]
+    url = db_config["host"]
+    port = db_config["port"]
+    return f"postgres://{user}:{pwd}@{url}:{port}/{db}"
+
+
 if __name__ == "__main__":
 
     parser = ArgumentParser(
         "setup",
         description="Generate project structure for denim-on-sam infrastructure",
     )
-    parser.add_argument("outdir")
     parser.add_argument("config")
+    parser.add_argument("-o", "--out")
 
     args = parser.parse_args()
-    root_outdir = Path(args.outdir)
     config = Path(args.config)
+    if args.out is None:
+        root_outdir = config.with_suffix("").absolute()
+    else:
+        root_outdir = Path(args.out)
     days = 365
 
     SAM_SERVER_IP = "sam_server"
@@ -343,7 +414,7 @@ if __name__ == "__main__":
     initdb_dir.mkdir(exist_ok=True)
     ngnix_dir.mkdir(exist_ok=True)
 
-    server_tls, proxy_tls = None, None
+    server_tls, proxy_tls, health_tls = None, None, dict()
     mtls = False
     tls = False
     if "tls" in config:
@@ -359,12 +430,13 @@ if __name__ == "__main__":
             cert_config["OU"],
             cert_config["CN"],
         )
-        server_tls, proxy_tls = generate_tls(root_outdir, cert_cnf, days, mtls)
+        server_tls, proxy_tls, health_tls = generate_tls(
+            root_outdir, cert_cnf, days, mtls
+        )
     port = "80" if server_tls is None else "443"
 
     in_compose = Path(__file__).parent / "files/docker-compose.yml"
-    denim_compose = root_outdir / "docker-compose.yml"
-    db_url = create_docker_compose(
+    db_config = create_docker_compose(
         tls,
         mtls,
         config.get("expose", None),
@@ -373,23 +445,9 @@ if __name__ == "__main__":
         root_outdir,
         True,
         in_compose,
-        denim_compose,
     )
 
-    in_sam_compose = Path(__file__).parent / "files/sam-docker-compose.yml"
-    sam_compose = root_outdir / "sam-docker-compose.yml"
-    db_url = create_docker_compose(
-        tls,
-        mtls,
-        config.get("expose", None),
-        expose_dispatch,
-        port,
-        root_outdir,
-        False,
-        in_sam_compose,
-        sam_compose,
-    )
-
+    db_url = create_db_url(db_config)
     server_config = {
         "databaseUrl": db_url,
         "address": f"0.0.0.0:{port}",
@@ -404,6 +462,31 @@ if __name__ == "__main__":
         "channelBufferSize": config["bufferSize"],
         "logging": config.get("logging", ""),
     }
+
+    health_config = {
+        "address": "0.0.0.0:80",
+        "denim": {"address": f"{DENIM_PROXY_IP}:{port}", **health_tls},
+        "sam": {"address": f"{SAM_SERVER_IP}:{port}", **health_tls},
+        "database": db_config,
+    }
+
+    client_config = {
+        "address": f"gateway:{port}",
+        "dispatchAddress": "sam_dispatch:80",
+        "channelBufferSize": config["bufferSize"],
+        "logging": config.get("logging", ""),
+    }
+
+    driver_config = {
+        "dispatchAddress": f"localhost:{expose_dispatch}",
+        "denim": dispatch_config["type"] == "denim",
+        "clients": dispatch_config["clients"],
+        "reportPath": "./reports/" + dispatch_config["report"],
+    }
+
+    if "tls" in config:
+        client_config["certificatePath"] = "/certs/root/root.crt"
+
     if server_tls is not None:
         server_config["tls"] = server_tls
     if proxy_tls is not None:
@@ -415,6 +498,16 @@ if __name__ == "__main__":
         json.dump(server_config, f, indent=2)
     with open(config_dir / "dispatch.json", "w") as f:
         json.dump(dispatch_config, f, indent=2)
+    with open(config_dir / "health.json", "w") as f:
+        json.dump(health_config, f, indent=2)
+    with open(config_dir / "client.json", "w") as f:
+        json.dump(client_config, f, indent=2)
+    with open(config_dir / "driver.json", "w") as f:
+        json.dump(driver_config, f, indent=2)
+
+    driverpy = Path(__file__).parent / "files/driver.py"
+    dest = root_outdir / "driver.py"
+    shutil.copy(driverpy, dest)
 
     with open(initdb_dir / "setup.sql", "w") as f:
         f.write(create_setupsql(config["linkSecret"], config["provisionTimeout"]))
@@ -423,11 +516,6 @@ if __name__ == "__main__":
         print("Failed to download init.sql")
         sys.exit(1)
 
-    with open(ngnix_dir / "nginx.conf", "w") as f:
-        temp = Path(__file__).parent / "files/nginx.conf"
-        f.write(create_nginx(port, mtls, temp))
-    with open(ngnix_dir / "sam-nginx.conf", "w") as f:
-        temp = Path(__file__).parent / "files/sam-nginx.conf"
-        f.write(create_nginx(port, mtls, temp))
-
+    nginx = Path(__file__).parent / "files/nginx.conf"
+    create_nginx(port, mtls, nginx, root_outdir)
     print("Done!")
