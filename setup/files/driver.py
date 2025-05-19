@@ -180,14 +180,16 @@ def create_traffic_csv(data: list[dict], file: str):
             writer.writerows(data)
 
 
-def create_analysis_config(report: dict[str, dict[str, dict]], ips: dict[str, str]):
+def create_analysis_config(
+    report: dict[str, dict[str, dict]], ips: dict[str, str], is_denim: bool
+):
     server_ip = ips["gateway"]
 
     for name, client in report["clients"].items():
         friends: list[dict] = list(client["friends"].values())
 
         for friend in friends:
-            if not friend["denim"]:
+            if not friend["denim"] and is_denim:
                 continue
             return {
                 "target": report["ipAddresses"][name],
@@ -278,10 +280,7 @@ if __name__ == "__main__":
 
     print("Saving Analysis config...")
     analysis_file = Path("./analysis/settings.json")
-    acfg = create_analysis_config(
-        report_data,
-        ips,
-    )
+    acfg = create_analysis_config(report_data, ips, is_denim)
     with open(analysis_file, "w") as f:
         json.dump(acfg, f, indent=2)
 

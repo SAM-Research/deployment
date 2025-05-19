@@ -465,10 +465,12 @@ if __name__ == "__main__":
 
     health_config = {
         "address": "0.0.0.0:80",
-        "denim": {"address": f"{DENIM_PROXY_IP}:{port}", **health_tls},
         "sam": {"address": f"{SAM_SERVER_IP}:{port}", **health_tls},
         "database": db_config,
     }
+
+    if dispatch_config["type"] == "denim":
+        health_config["denim"] = {"address": f"{DENIM_PROXY_IP}:{port}", **health_tls}
 
     client_config = {
         "address": f"gateway:{port}",

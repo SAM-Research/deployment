@@ -1,3 +1,4 @@
 pyshark==0.6
 docker
 docker==7.1.0
+PyYAML==6.0.2
