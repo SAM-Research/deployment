@@ -64,7 +64,7 @@ services:
     volumes:
       - ./config/health.json:/config.json
   client:
-    image: test-client
+    image: ghcr.io/sam-research/test-client:main
     command: ["config.json"]
     networks:
       - default
