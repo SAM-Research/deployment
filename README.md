@@ -54,8 +54,10 @@ The internal services can also be setup to use mTLS.
     "messageSizeRange": [200, 500],
     "denimProbability": 1,
     "sendRateRange": [1, 5],
-    "startEpoch": 10,
     "report": "report.json",
+    "replyRateRange": [1, 1],
+    "replyProbability": [0.95, 0.95],
+    "staleReply": 100,
     // additional field to expose dispatch to host
     "expose": 8080
   }
