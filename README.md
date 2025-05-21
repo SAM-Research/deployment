@@ -28,6 +28,7 @@ The internal services can also be setup to use mTLS.
     "deniableRatio": 1.0, // Deniable ratio (q)
     "bufferSize": 10, // Size of buffers used internally by both the SAM Server and the DenIM-SAM-Proxy
     "expose": 4443, // Port used on your host machine (optional, only if you want to access the server from outside the docker network)
+    "inmemory": false // Use inmemory sqlite for clients
     "tls": {
       // TLS configuration (optional)
       "mtls": true, // Internal communication on the network happens over mtls
