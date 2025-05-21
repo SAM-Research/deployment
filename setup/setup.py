@@ -476,6 +476,7 @@ if __name__ == "__main__":
         "address": f"gateway:{port}",
         "dispatchAddress": "sam_dispatch:80",
         "channelBufferSize": config["bufferSize"],
+        "inmemory": config["inmemory"],
         "logging": config.get("logging", ""),
     }
 
