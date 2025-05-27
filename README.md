@@ -59,6 +59,7 @@ The internal services can also be setup to use mTLS.
     "replyRateRange": [1, 1],
     "replyProbability": [0.95, 0.95],
     "staleReplyRange": [100, 100],
+    "friendAlpha": 0.3,
     // additional field to expose dispatch to host
     "expose": 8080
   }
@@ -69,4 +70,7 @@ The internal services can also be setup to use mTLS.
 3. install tshark https://www.wireshark.org/docs/man-pages/tshark.html
 4. install dependencies `pip install -r requirements.txt`
 5. run `python ./setup/setup.py <PROJECT_NAME> <PATH_TO_JSON_CONFIG>`
-6. run `docker compose up`
+6. run `cd <PROJECT_NAME>`
+7. run `python driver.py`
+8. run `cd ..`
+9. run `python graph.py <PROJECT_NAME>`
