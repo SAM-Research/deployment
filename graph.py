@@ -23,7 +23,12 @@ def clustered_layout(G: nx.Graph, offset_v: float):
     return pos
 
 
-def friends(graph: dict[str, set], edges: tuple[list, list], labels: dict[tuple, int]):
+def friends(
+    graph: dict[str, set],
+    edges: tuple[list, list],
+    labels: dict[tuple, int],
+    title: str,
+):
     denim_edges, normal_edges = edges
     G = nx.Graph()
     for u, neighbors in graph.items():
@@ -34,17 +39,18 @@ def friends(graph: dict[str, set], edges: tuple[list, list], labels: dict[tuple,
     pos = clustered_layout(G, 2.0)
 
     plt.figure(figsize=(8, 6))
-    nx.draw_networkx_nodes(G, pos, node_color="lightblue")
+    nx.draw_networkx_nodes(G, pos, node_color="#e1d5e7")
     nx.draw_networkx_labels(G, pos)
 
     nx.draw_networkx_edges(
-        G, pos, edgelist=normal_edges, edge_color="gray", style="solid"
+        G, pos, edgelist=normal_edges, edge_color="black", style="solid"
     )
 
     nx.draw_networkx_edges(
-        G, pos, edgelist=denim_edges, edge_color="gray", style="dashed"
+        G, pos, edgelist=denim_edges, edge_color="black", style="dashed"
     )
     nx.draw_networkx_edge_labels(G, pos, edge_labels=labels, font_color="red")
+    plt.title(title)
     plt.axis("off")
     plt.show()
 
@@ -144,6 +150,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     with open(f"./{args.name}/reports/report.json", "r") as f:
         data = json.load(f)
+        print("Clients:", len(data["clients"]))
+        print("Reports:", len(data["reports"]))
         msg_lens = total_msgs(data)
         edge_tuple = edges(data, msg_lens)
         graph = make_ip_graph(data, msg_lens)
@@ -158,4 +166,4 @@ if __name__ == "__main__":
         for c, p in sorted(popularity_table.items(), key=lambda x: x[1], reverse=True):
             print(f"{c}: {p}")
 
-        friends(graph, edge_tuple, label)
+        friends(graph, edge_tuple, label, args.name)
